@@ -1,0 +1,42 @@
+
+select user_id, date(created_at) as created_at, JSON_EXTRACT(output_json, "$.spid_config.ad.module_output.mod_uw_ad_015_mp_fibe.approved") as fibe_approved,
+JSON_EXTRACT(output_json, "$.spid_config.ad.module_output.mod_uw_ad_013_mp_creditvidya.approved") as prefr_approved,
+JSON_EXTRACT(output_json, "$.spid_config.ad.module_output.mod_uw_ad_014_mp_iifl.approved") as iifl_approved
+from de_looger
+where DATE(created_at) >= "2024-04-01" and purpose = "bureaucheck" and (
+JSON_EXTRACT(output_json, "$.spid_config.ad.module_output.mod_uw_ad_015_mp_fibe.approved") = 1 or 
+JSON_EXTRACT(output_json, "$.spid_config.ad.module_output.mod_uw_ad_013_mp_creditvidya.approved") = 1 or
+JSON_EXTRACT(output_json, "$.spid_config.ad.module_output.mod_uw_ad_014_mp_iifl.approved") = 1 );
+
+
+select
+b.user_name, mm.phone_number, q.language, mm.coupon_code, 
+(case when g.products_redirected is not null then 'K: user_redirected_partner_screen' 
+when g.products_viewed is not null then 'L: not_redirected_to_partner_screen' else 'J: seen_offer_no_action_taken' end)
+ as offer_status, g.products_viewed, g.products_redirected,
+ date(a.created_at) as created_at, JSON_EXTRACT(output_json, "$.spid_config.ad.module_output.mod_uw_ad_015_mp_fibe.approved") as fibe_approved,
+JSON_EXTRACT(output_json, "$.spid_config.ad.module_output.mod_uw_ad_013_mp_creditvidya.approved") as prefr_approved,
+JSON_EXTRACT(output_json, "$.spid_config.ad.module_output.mod_uw_ad_014_mp_iifl.approved") as iifl_approved
+
+from de_looger a
+left join
+(SELECT user_id, min(created_at) as first_time_offer_seen_at, GROUP_CONCAT( case when activity = 'apply' then 
+ b.sub_offer_name else NULL END ORDER BY b.sub_offer_name SEPARATOR ',') AS products_redirected, 
+ GROUP_CONCAT( case when activity <> 'apply' then b.sub_offer_name else NULL END ORDER BY
+ b.sub_offer_name SEPARATOR ',') AS products_viewed FROM (select * from user_offer_activity_details) a 
+ left join (select * from asp_playground.sub_offer_name) b on a.sub_offer_id = b.sub_offer_id group by 1) g 
+ on g.user_id = a.user_id 
+ left join reporting_db.marketing_master mm on a.user_id  = mm.user_id 
+ left join user b on a.user_id = b.id 
+ left join (SELECT user_id , case when json_extract(questions_response, '$[0].question_response[0].options[0].field_text') 
+ is not null then json_unquote(json_extract(questions_response, '$[0].question_response[0].options[0].field_text')) else 
+ json_unquote(json_extract(questions_response, '$[0].options[0].option_text')) end as language 
+ from questionnaire_response 
+where id in (SELECT max(id) from questionnaire_response group by user_id)) q on a.user_id= q.user_id
+where 
+purpose = "bureaucheck" and (
+JSON_EXTRACT(output_json, "$.spid_config.ad.module_output.mod_uw_ad_015_mp_fibe.approved") = 1 or 
+JSON_EXTRACT(output_json, "$.spid_config.ad.module_output.mod_uw_ad_013_mp_creditvidya.approved") = 1 or
+JSON_EXTRACT(output_json, "$.spid_config.ad.module_output.mod_uw_ad_014_mp_iifl.approved") = 1 )
+and products_redirected is null;
+
