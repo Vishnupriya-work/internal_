@@ -1,0 +1,16 @@
+select coupon_code, 
+case when products_redirected is null then 0 else 1 end as fl_product_redirected, 
+ JSON_EXTRACT(output_json, "$.spid_config.ad.module_output.mod_uw_ad_015_mp_fibe.approved") as fibe_approved,
+JSON_EXTRACT(output_json, "$.spid_config.ad.module_output.mod_uw_ad_013_mp_creditvidya.approved") as prefr_approved,
+JSON_EXTRACT(output_json, "$.spid_config.ad.module_output.mod_uw_ad_017_mp_branch.approved") as branch_approved,
+JSON_EXTRACT(output_json, "$.spid_config.ad.module_output.mod_uw_ad_011_mp_credithaat.approved") as credithaat_approved,
+JSON_EXTRACT(output_json, "$.spid_config.ad.module_output.mod_uw_ad_014_mp_iifl.approved") as iifl_approved
+from (select * from  de_looger where purpose = "bureaucheck" ) a
+left join
+(SELECT user_id, min(created_at) as first_time_offer_seen_at, GROUP_CONCAT( case when activity = 'apply' then 
+ b.sub_offer_name else NULL END ORDER BY b.sub_offer_name SEPARATOR ',') AS products_redirected, 
+ GROUP_CONCAT( case when activity <> 'apply' then b.sub_offer_name else NULL END ORDER BY
+ b.sub_offer_name SEPARATOR ',') AS products_viewed FROM (select * from user_offer_activity_details) a 
+ left join (select * from asp_playground.sub_offer_name) b on a.sub_offer_id = b.sub_offer_id group by 1) g 
+ on g.user_id = a.user_id 
+ left join reporting_db.marketing_master mm on a.user_id  = mm.user_id ;
